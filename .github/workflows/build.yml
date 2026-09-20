@@ -1,0 +1,54 @@
+name: Build APK Nala
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ekstrak project dari nala_ai.zip
+        run: unzip -q nala_ai.zip -d src
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Buat folder Android
+        working-directory: src/nala_ai
+        run: |
+          cp -r lib /tmp/lib_backup
+          flutter create --platforms=android --project-name nala_ai --org com.nala .
+          rm -rf lib && cp -r /tmp/lib_backup lib
+
+      - name: Sesuaikan konfigurasi Android
+        working-directory: src/nala_ai
+        run: python3 tool/patch_android.py
+
+      - name: Ambil dependency
+        working-directory: src/nala_ai
+        run: flutter pub get
+
+      - name: Build APK
+        working-directory: src/nala_ai
+        run: flutter build apk --release --target-platform android-arm64
+
+      - name: Terbitkan APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: Nala APK #${{ github.run_number }}
+          files: src/nala_ai/build/app/outputs/flutter-apk/app-release.apk
